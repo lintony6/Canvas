@@ -203,7 +203,8 @@ function beginStroke(e) {
     type: 'stroke',
     color: currentTool === 'eraser' ? '#000000' : brushColor,
     size: brushSize,
-    points: [{ x: startPos.x, y: startPos.y }]
+    points: [{ x: startPos.x, y: startPos.y }],
+    isEraser: currentTool === 'eraser' // Explicitly mark eraser strokes
   };
 }
 
@@ -898,12 +899,12 @@ function replayStrokePoints(s) {
       resolve();
       return;
     }
-    console.log('Replaying stroke points, color:', s.color, 'size:', s.size);
+    console.log('Replaying stroke points, color:', s.color, 'size:', s.size, 'isEraser:', s.isEraser);
     drawingCtx.lineWidth = s.size;
     drawingCtx.lineCap = 'round';
     drawingCtx.lineJoin = 'round';
-    drawingCtx.globalCompositeOperation = s.type === 'stroke' && s.color === '#000000' ? 'destination-out' : 'source-over';
-    if (s.type !== 'stroke' || s.color !== '#000000') {
+    drawingCtx.globalCompositeOperation = s.isEraser ? 'destination-out' : 'source-over';
+    if (!s.isEraser) {
       drawingCtx.strokeStyle = s.color;
     }
     drawingCtx.beginPath();
