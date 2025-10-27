@@ -33,7 +33,7 @@ saveState();
 function startDraw(e) {
   drawing = true;
   ctx.beginPath();
-  const {x, y} = getPos(e);
+  const { x, y } = getPos(e);
   ctx.moveTo(x, y);
 }
 
@@ -46,7 +46,7 @@ function endDraw() {
 
 function draw(e) {
   if (!drawing) return;
-  const {x, y} = getPos(e);
+  const { x, y } = getPos(e);
   ctx.lineWidth = brushSize;
   ctx.lineCap = "round";
   ctx.strokeStyle = isErasing ? "#ffffff" : brushColor;
@@ -60,32 +60,26 @@ function getPos(e) {
   return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
 
-// === Save Canvas State ===
+// === Save / Undo / Redo ===
 function saveState() {
-  undoStack.push(canvas.toDataURL());
-  if (undoStack.length > 20) undoStack.shift();
+  undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+  if (undoStack.length > 20) undoStack.shift(); // limit history
   redoStack.length = 0;
-}
-
-// === Undo / Redo ===
-function restoreImage(imgData) {
-  const img = new Image();
-  img.src = imgData;
-  img.onload = () => ctx.drawImage(img, 0, 0);
 }
 
 document.getElementById("undo").addEventListener("click", () => {
   if (undoStack.length > 1) {
     redoStack.push(undoStack.pop());
-    restoreImage(undoStack[undoStack.length - 1]);
+    const prev = undoStack[undoStack.length - 1];
+    ctx.putImageData(prev, 0, 0);
   }
 });
 
 document.getElementById("redo").addEventListener("click", () => {
   if (redoStack.length > 0) {
-    const imgData = redoStack.pop();
-    undoStack.push(imgData);
-    restoreImage(imgData);
+    const next = redoStack.pop();
+    undoStack.push(next);
+    ctx.putImageData(next, 0, 0);
   }
 });
 
@@ -93,6 +87,7 @@ document.getElementById("redo").addEventListener("click", () => {
 document.getElementById("colorPicker").addEventListener("change", (e) => {
   brushColor = e.target.value;
   isErasing = false;
+  document.getElementById("eraser").style.background = "#007bff";
 });
 
 document.getElementById("brushSize").addEventListener("input", (e) => {
