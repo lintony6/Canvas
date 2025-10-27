@@ -1,6 +1,18 @@
 // -----------------------------
 // Canvas Draw — single-file logic
 // -----------------------------
+// debug: list the IDs your script expects
+const expectedIDs = [
+  "colorPicker","brushSize","toolBrush","toolEraser","shapesWrap","toolShapes",
+  "shapesDropdown","bgImageInput","canvasWrap","drawingCanvas","brushPreview",
+  "clearBtn","undo","redo","download","darkToggle","replayBtn","hiddenTextInput"
+];
+
+expectedIDs.forEach(id => {
+  if (!document.getElementById(id)) {
+    console.warn("MISSING element with id:", id);
+  }
+});
 
 /* Elements */
 const canvas = document.getElementById('drawingCanvas');
