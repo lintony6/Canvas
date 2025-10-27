@@ -1,12 +1,12 @@
 # Canvas Draw
 
 ## Overview
-Canvas draw is a web-based drawing tool built with HTML5 Canvas and JavaScript. It allows users to create digital artwork with a brush, eraser, shapes, text, and flood fill. Features include background image support, undo/redo, dark mode, timelapse replay, and image download.  
+Canvas Draw is a web-based drawing tool built with HTML5 Canvas and JavaScript. It allows users to create digital artwork with a brush, eraser, shapes, text, and flood fill. Features include background image support, undo/redo, dark mode, timelapse replay, and image download.  
 
 ---
 
 ![CanvasWebUI](CanvasWebUI.png)  
-**Try it live**: [https://lintony6.github.io/Canvas](https://lintony6.github.io/Canvas)
+**Try it live**: [https://lintony6.github.io/Canvas](https://lintony6.github.io/CanvasDraw)
 
 ## Features
 - **Tools**: Brush, eraser, shapes (rectangle, circle, line), text, flood fill.
