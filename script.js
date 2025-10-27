@@ -392,8 +392,19 @@ function placeTextAt(x, y) {
 
 /* Paint-bucket flood fill */
 function floodFill(startX, startY, fillColor) {
-  if (!drawingCtx) return;
+  if (!drawingCtx || !drawingCanvasEl) {
+    console.error('Flood fill aborted: Missing drawing context or canvas');
+    return;
+  }
   try {
+    // Ensure coordinates are within canvas bounds
+    startX = Math.floor(startX);
+    startY = Math.floor(startY);
+    if (startX < 0 || startX >= drawingCanvasEl.width || startY < 0 || startY >= drawingCanvasEl.height) {
+      console.warn('Flood fill aborted: Start position out of bounds', startX, startY);
+      return;
+    }
+
     const imageData = drawingCtx.getImageData(0, 0, drawingCanvasEl.width, drawingCanvasEl.height);
     const data = imageData.data;
     const targetOffset = (startY * drawingCanvasEl.width + startX) * 4;
@@ -401,23 +412,35 @@ function floodFill(startX, startY, fillColor) {
       data[targetOffset],
       data[targetOffset + 1],
       data[targetOffset + 2],
-      data[targetOffset + 3],
+      data[targetOffset + 3]
     ];
     const fill = hexToRgba(fillColor);
-    if (colorsMatch(targetColor, fill)) return;
+
+    // Check if the target pixel is already the fill color
+    if (colorsMatch(targetColor, fill)) {
+      console.log('Flood fill skipped: Target color matches fill color');
+      return;
+    }
+
+    // Stack-based flood fill
     const stack = [[startX, startY]];
     while (stack.length) {
       const [x, y] = stack.pop();
       const idx = (y * drawingCanvasEl.width + x) * 4;
       if (x < 0 || x >= drawingCanvasEl.width || y < 0 || y >= drawingCanvasEl.height) continue;
       if (!matchTargetColor(data, idx, targetColor)) continue;
+
       setPixel(data, idx, fill);
+
+      // Push neighboring pixels
       stack.push([x - 1, y]);
       stack.push([x + 1, y]);
       stack.push([x, y - 1]);
       stack.push([x, y + 1]);
     }
+
     drawingCtx.putImageData(imageData, 0, 0);
+    console.log('Flood fill completed with color:', fillColor);
     pushStroke({ type: 'fill', color: fillColor });
     saveState();
   } catch (err) {
@@ -477,16 +500,17 @@ function imgToDataURL(img) {
 /* --- helpers --- */
 function hexToRgba(hex) {
   try {
+    // Remove '#' and parse hex color
     const bigint = parseInt(hex.slice(1), 16);
     return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255, 255];
   } catch (err) {
     console.error('Error in hexToRgba:', err);
-    return [0, 0, 0, 255];
+    return [0, 0, 0, 255]; // Fallback to black
   }
 }
-
 function colorsMatch(a, b) {
-  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  // Compare RGB and alpha values
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
 }
 
 function matchTargetColor(data, idx, target) {
@@ -717,7 +741,7 @@ function onPointerMove(e) {
 
 /* Pointer down/up handlers */
 if (drawingCanvasEl) {
-  drawingCanvasEl.addEventListener('pointerdown', (ev) => {
+drawingCanvasEl.addEventListener('pointerdown', (ev) => {
     ev.preventDefault();
     const pos = getPointerPosFromEvent(ev);
     console.log('pointerdown:', currentTool, pos);
@@ -730,7 +754,7 @@ if (drawingCanvasEl) {
     } else if (currentTool === 'text') {
       placeTextAt(pos.x, pos.y);
     } else if (currentTool === 'fill') {
-      floodFill(Math.floor(pos.x), Math.floor(pos.y), brushColor);
+      floodFill(pos.x, pos.y, brushColor);
     }
   });
 
