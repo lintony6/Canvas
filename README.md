@@ -26,7 +26,7 @@ Canvas Draw is a web-based drawing tool built with HTML5 Canvas and JavaScript. 
 ### Setup
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/lintony6/CanvasDraw.git
    ```
 2. Deploy to GitHub Pages (easiest):
    - Enable Pages in repo settings (source: main branch).
