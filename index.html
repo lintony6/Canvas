@@ -1,25 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Canvas Draw</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Canvas Draw — Advanced</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>🎨 Canvas Draw</h1>
+  <header>
+    <h1>🎨 Canvas Draw</h1>
+    <div class="topbar">
+      <label class="tool">
+        <input id="colorPicker" type="color" value="#000000" />
+      </label>
 
-  <div class="toolbar">
-    <input type="color" id="colorPicker" value="#000000">
-    <input type="range" id="brushSize" min="1" max="50" value="5">
-    <button id="eraser">🩹 Eraser</button>
-    <button id="clear">🧼 Clear</button>
-    <button id="undo">↩️ Undo</button>
-    <button id="redo">↪️ Redo</button>
-    <button id="download">💾 Download</button>
-  </div>
+      <label class="tool">
+        <input id="brushSize" type="range" min="1" max="64" value="6" />
+      </label>
 
-  <canvas id="drawingCanvas"></canvas>
+      <button class="tool" id="toolBrush" aria-pressed="true">✏️ Brush</button>
+      <button class="tool" id="toolEraser">🩹 Eraser</button>
+
+      <div class="tool tool-dropdown" id="shapesWrap">
+        <button id="toolShapes">⬛ Shapes ▾</button>
+        <div class="dropdown" id="shapesDropdown" aria-hidden="true">
+          <button class="shapeOption" data-shape="rect">Rectangle</button>
+          <button class="shapeOption" data-shape="circle">Circle</button>
+          <button class="shapeOption" data-shape="line">Line</button>
+        </div>
+      </div>
+
+      <button class="tool" id="toolText">🔤 Text</button>
+      <button class="tool" id="toolFill">🪣 Fill</button>
+
+      <label class="tool fileLabel" title="Insert background image">
+        🖼️
+        <input id="bgImageInput" type="file" accept="image/*" />
+      </label>
+    </div>
+  </header>
+
+  <main>
+    <div id="canvasWrap">
+      <canvas id="drawingCanvas"></canvas>
+      <div id="brushPreview" aria-hidden="true"></div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="bottombar">
+      <button class="util" id="clearBtn">🧼 Clear</button>
+      <button class="util" id="undo">↩️ Undo</button>
+      <button class="util" id="redo">↪️ Redo</button>
+      <button class="util" id="download">💾 Download</button>
+      <button class="util" id="darkToggle">🌙 Dark</button>
+      <button class="util" id="replayBtn">🎥 Replay</button>
+    </div>
+  </footer>
+
+  <!-- Hidden text input used for placing text on canvas -->
+  <input id="hiddenTextInput" type="text" placeholder="Type then Enter" autocomplete="off" />
 
   <script src="script.js"></script>
 </body>
