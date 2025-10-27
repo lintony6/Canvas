@@ -6,7 +6,7 @@ Canvas Draw is a web-based drawing tool built with HTML5 Canvas and JavaScript. 
 ---
 
 ![CanvasWebUI](CanvasWebUI.png)  
-**Try it live**: [https://lintony6.github.io/Canvas](https://lintony6.github.io/CanvasDraw)
+**Try it live**: [https://lintony6.github.io/CanvasDraw](https://lintony6.github.io/CanvasDraw)
 
 ## Features
 - **Tools**: Brush, eraser, shapes (rectangle, circle, line), text, flood fill.
