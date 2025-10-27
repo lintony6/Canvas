@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Canvas Draw — Advanced</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=1" />
 </head>
 <body>
   <header>
@@ -41,9 +41,9 @@
   </header>
 
   <main>
-    <div id="canvasWrap">
-      <canvas id="drawingCanvas"></canvas>
-      <div id="brushPreview" aria-hidden="true"></div>
+    <div id="canvasWrap" style="position: relative;">
+    <canvas id="bgCanvas" style="position: absolute; top: 0; left: 0; z-index: 1;"></canvas>
+    <canvas id="drawingCanvas" style="position: absolute; top: 0; left: 0; z-index: 2;"></canvas>
     </div>
   </main>
 
@@ -61,6 +61,6 @@
   <!-- Hidden text input used for placing text on canvas -->
   <input id="hiddenTextInput" type="text" placeholder="Type then Enter" autocomplete="off" />
 
-  <script src="script.js?v=2">)</script>
+  <script src="script.js?v=2"></script>
 </body>
 </html>
