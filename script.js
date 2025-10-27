@@ -1,13 +1,12 @@
 // -----------------------------
 // Canvas Draw — single-file logic
 // -----------------------------
-// debug: list the IDs your script expects
+// Debug: list the IDs your script expects
 const expectedIDs = [
-  "colorPicker","brushSize","toolBrush","toolEraser","shapesWrap","toolShapes",
-  "shapesDropdown","bgImageInput","canvasWrap","drawingCanvas","brushPreview",
-  "clearBtn","undo","redo","download","darkToggle","replayBtn","hiddenTextInput"
+  "colorPicker", "brushSize", "toolBrush", "toolEraser", "shapesWrap", "toolShapes",
+  "shapesDropdown", "bgImageInput", "canvasWrap", "drawingCanvas", "brushPreview",
+  "clearBtn", "undo", "redo", "download", "darkToggle", "replayBtn", "hiddenTextInput"
 ];
-
 expectedIDs.forEach(id => {
   if (!document.getElementById(id)) {
     console.warn("MISSING element with id:", id);
@@ -28,40 +27,31 @@ const shapeButtons = document.querySelectorAll('.shapeOption');
 const toolText = document.getElementById('toolText');
 const toolFill = document.getElementById('toolFill');
 const bgImageInput = document.getElementById('bgImageInput');
-
 const clearBtn = document.getElementById('clearBtn');
 const undoBtn = document.getElementById('undo');
 const redoBtn = document.getElementById('redo');
 const downloadBtn = document.getElementById('download');
 const darkToggle = document.getElementById('darkToggle');
 const replayBtn = document.getElementById('replayBtn');
-
 const hiddenTextInput = document.getElementById('hiddenTextInput');
 
 /* Canvas sizing */
 function setCanvasSize() {
-  // Save existing content to temp canvas
   const temp = document.createElement('canvas');
   temp.width = canvas.width || 800;
   temp.height = canvas.height || 600;
   temp.getContext('2d').drawImage(canvas, 0, 0);
-
-  // Set new sizes
   const maxWidth = Math.min(window.innerWidth * 0.95, 1100);
   const width = Math.max(600, Math.floor(maxWidth));
   const height = Math.max(400, Math.floor(window.innerHeight * 0.65));
-
   canvas.width = width;
   canvas.height = height;
-
-  // redraw previous
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(temp, 0, 0, temp.width, temp.height, 0, 0, canvas.width, canvas.height);
 }
 setCanvasSize();
 window.addEventListener('resize', () => {
   setCanvasSize();
-  // After resize, ensure we push a state so undo works well
   saveState();
 });
 
@@ -75,6 +65,7 @@ let isReplaying = false;
 let startPos = null; // for shapes
 let lastPos = null; // for stroke
 let bgImage = null;
+let previewCanvas = null;
 
 /* Undo/Redo stacks using ImageData */
 const undoStack = [];
@@ -85,26 +76,26 @@ const strokes = []; // each stroke: {type:'stroke'|'shape'|'text'|'fill'|'bg', c
 
 /* Helpers */
 function pushStroke(stroke) {
-  if (isReplaying) return; // don't record during replay
+  if (isReplaying) return;
   strokes.push(stroke);
 }
 
 function setCompositeMode() {
   if (currentTool === 'eraser') {
-    ctx.globalCompositeOperation = 'destination-out'; // actually erase
+    ctx.globalCompositeOperation = 'destination-out';
+    console.log('Eraser mode: globalCompositeOperation = destination-out');
   } else {
-    ctx.globalCompositeOperation = 'source-over'; // normal drawing
+    ctx.globalCompositeOperation = 'source-over';
+    console.log('Non-eraser mode: globalCompositeOperation = source-over');
   }
 }
 
 function saveState() {
-  // store current canvas pixel data
   try {
     undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
     if (undoStack.length > 50) undoStack.shift();
     redoStack.length = 0;
   } catch (e) {
-    // fallback: ignore (shouldn't happen)
     console.warn('saveState failed', e);
   }
 }
@@ -120,7 +111,7 @@ ctx.fillRect(0, 0, canvas.width, canvas.height);
 saveState();
 
 /* Brush preview */
-function updateBrushPreview(show, x=0, y=0) {
+function updateBrushPreview(show, x = 0, y = 0) {
   if (!show) {
     brushPreview.style.display = 'none';
     return;
@@ -130,55 +121,54 @@ function updateBrushPreview(show, x=0, y=0) {
   brushPreview.style.top = y + 'px';
   brushPreview.style.width = brushSize + 'px';
   brushPreview.style.height = brushSize + 'px';
-  brushPreview.style.background = currentTool === 'eraser' ? '#ffffff' : brushColor;
-  brushPreview.style.border = currentTool === 'eraser' ? '1px solid rgba(0,0,0,0.08)' : '1px solid rgba(0,0,0,0.12)';
-  brushPreview.style.boxShadow = '0 0 0 2px rgba(0,0,0,0.04)';
   if (currentTool === 'eraser') {
-  brushPreview.style.background = 'rgba(255,255,255,0.2)';
-  brushPreview.style.border = '1px solid rgba(255,255,255,0.5)';
-}
+    brushPreview.style.background = 'rgba(255,255,255,0.2)';
+    brushPreview.style.border = document.documentElement.getAttribute('data-theme') === 'dark'
+      ? '1px solid rgba(255,255,255,0.5)'
+      : '1px solid rgba(0,0,0,0.08)';
+  } else {
+    brushPreview.style.background = brushColor;
+    brushPreview.style.border = '1px solid rgba(0,0,0,0.12)';
+  }
+  brushPreview.style.boxShadow = '0 0 0 2px rgba(0,0,0,0.04)';
 }
 
 /* Position helpers */
-function getPointerPos(e) {
-  if (e.touches && e.touches.length) e = e.touches[0];
+function getPointerPosFromEvent(e) {
+  if (e.touches && e.touches[0]) e = e.touches[0];
   const rect = canvas.getBoundingClientRect();
-  return { x: (e.clientX - rect.left), y: (e.clientY - rect.top) };
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
 
 /* Drawing freehand */
+let currentStroke = null;
 function beginStroke(e) {
   if (isReplaying) return;
   isDrawing = true;
   setCompositeMode();
-  startPos = getPointerPos(e);
+  startPos = getPointerPosFromEvent(e);
   lastPos = startPos;
   ctx.beginPath();
   ctx.moveTo(startPos.x, startPos.y);
-
-  // start a new stroke record
   currentStroke = {
     type: 'stroke',
     color: currentTool === 'eraser' ? '#ffffff' : brushColor,
     size: brushSize,
-    points: [{x:startPos.x, y:startPos.y}]
+    points: [{ x: startPos.x, y: startPos.y }]
   };
 }
 
 function continueStroke(e) {
   if (!isDrawing || isReplaying) return;
   setCompositeMode();
-  const p = getPointerPos(e);
+  const p = getPointerPosFromEvent(e);
   ctx.lineWidth = brushSize;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : brushColor;
-
   ctx.lineTo(p.x, p.y);
   ctx.stroke();
-
-  // record point
-  currentStroke.points.push({x:p.x, y:p.y});
+  currentStroke.points.push({ x: p.x, y: p.y });
   lastPos = p;
 }
 
@@ -186,13 +176,11 @@ function endStroke(e) {
   if (!isDrawing || isReplaying) return;
   isDrawing = false;
   ctx.closePath();
-  ctx.globalCompositeOperation = 'source-over';
   pushStroke(currentStroke);
   saveState();
 }
 
 /* Shape tools (preview while dragging & commit on mouseup) */
-let previewCanvas = null;
 function ensurePreviewCanvas() {
   if (!previewCanvas) {
     previewCanvas = document.createElement('canvas');
@@ -202,21 +190,31 @@ function ensurePreviewCanvas() {
     previewCanvas.width = canvas.width;
     previewCanvas.height = canvas.height;
     previewCanvas.style.pointerEvents = 'none';
-    previewCanvas.getContext('2d').clearRect(0,0,previewCanvas.width, previewCanvas.height);
+    previewCanvas.style.zIndex = '1000';
+    previewCanvas.style.background = 'transparent';
     canvas.parentElement.appendChild(previewCanvas);
   }
+  const pctx = previewCanvas.getContext('2d');
+  pctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
 }
 
 function clearPreview() {
   if (previewCanvas) {
-    previewCanvas.getContext('2d').clearRect(0,0,previewCanvas.width, previewCanvas.height);
+    console.log('Clearing preview canvas');
+    const pctx = previewCanvas.getContext('2d');
+    pctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+    previewCanvas.style.background = 'transparent';
+    if (!isDrawing && currentTool !== 'shape') {
+      previewCanvas.remove();
+      previewCanvas = null;
+    }
   }
 }
 
 function drawShapePreview(type, sx, sy, ex, ey, color, size) {
   ensurePreviewCanvas();
   const pctx = previewCanvas.getContext('2d');
-  pctx.clearRect(0,0,previewCanvas.width, previewCanvas.height);
+  pctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
   pctx.lineWidth = size;
   pctx.strokeStyle = color;
   pctx.fillStyle = color;
@@ -226,10 +224,10 @@ function drawShapePreview(type, sx, sy, ex, ey, color, size) {
     pctx.rect(sx, sy, w, h);
     pctx.stroke();
   } else if (type === 'circle') {
-    const cx = (sx + ex)/2, cy = (sy + ey)/2;
-    const rx = Math.abs(ex - sx)/2, ry = Math.abs(ey - sy)/2;
-    const r = Math.max(1, Math.sqrt(rx*rx + ry*ry));
-    pctx.arc(cx, cy, r, 0, Math.PI*2);
+    const cx = (sx + ex) / 2, cy = (sy + ey) / 2;
+    const rx = Math.abs(ex - sx) / 2, ry = Math.abs(ey - sy) / 2;
+    const r = Math.max(1, Math.sqrt(rx * rx + ry * ry));
+    pctx.arc(cx, cy, r, 0, Math.PI * 2);
     pctx.stroke();
   } else if (type === 'line') {
     pctx.moveTo(sx, sy);
@@ -239,35 +237,40 @@ function drawShapePreview(type, sx, sy, ex, ey, color, size) {
   pctx.closePath();
 }
 
-/* Commit shape onto main canvas */
 function commitShape(type, sx, sy, ex, ey) {
-  const color = brushColor;
+  console.log('Committing shape:', type, sx, sy, ex, ey);
+  const tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  setCompositeMode();
   ctx.lineWidth = brushSize;
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  if (type === 'rect') {
-    ctx.rect(sx, sy, ex - sx, ey - sy);
-    ctx.stroke();
-  } else if (type === 'circle') {
-    const cx = (sx + ex)/2, cy = (sy + ey)/2;
-    const rx = Math.abs(ex - sx)/2, ry = Math.abs(ey - sy)/2;
-    const r = Math.max(1, Math.sqrt(rx*rx + ry*ry));
-    ctx.arc(cx, cy, r, 0, Math.PI*2);
-    ctx.stroke();
-  } else if (type === 'line') {
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(ex, ey);
-    ctx.stroke();
+  ctx.strokeStyle = brushColor;
+  ctx.fillStyle = brushColor;
+  try {
+    ctx.beginPath();
+    if (type === 'rect') {
+      ctx.rect(sx, sy, ex - sx, ey - sy);
+      ctx.stroke();
+    } else if (type === 'circle') {
+      const cx = (sx + ex) / 2, cy = (sy + ey) / 2;
+      const rx = Math.abs(ex - sx) / 2, ry = Math.abs(ey - sy) / 2;
+      const r = Math.max(1, Math.sqrt(rx * rx + ry * ry));
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (type === 'line') {
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+    ctx.closePath();
+  } catch (err) {
+    console.error('Error in commitShape:', err);
+    ctx.putImageData(tempImageData, 0, 0);
+    return;
   }
-  ctx.closePath();
-
-  // record shape stroke
   pushStroke({
     type: 'shape',
     shape: type,
-    start: {x:sx, y:sy},
-    end: {x:ex, y:ey},
+    start: { x: sx, y: sy },
+    end: { x: ex, y: ey },
     color: brushColor,
     size: brushSize
   });
@@ -275,39 +278,47 @@ function commitShape(type, sx, sy, ex, ey) {
 }
 
 /* Text tool */
-function placeTextAt(x,y) {
-  // show hidden input near the canvas (offscreen visually but used to capture text)
-  hiddenTextInput.style.left = (x + canvas.getBoundingClientRect().left) + 'px';
-  hiddenTextInput.style.top = (y + canvas.getBoundingClientRect().top) + 'px';
+function placeTextAt(x, y) {
+  console.log('placeTextAt called at:', x, y);
+  hiddenTextInput.classList.add('text-active');
+  const rect = canvas.getBoundingClientRect();
+  hiddenTextInput.style.left = (x + rect.left) + 'px';
+  hiddenTextInput.style.top = (y + rect.top) + 'px';
   hiddenTextInput.style.position = 'fixed';
   hiddenTextInput.value = '';
   hiddenTextInput.style.opacity = '1';
   hiddenTextInput.focus();
-
-  // on enter, draw the text
-  const onEnter = (ev) => {
+  console.log('Text input positioned at:', hiddenTextInput.style.left, hiddenTextInput.style.top);
+  const onKey = (ev) => {
     if (ev.key === 'Enter') {
       const txt = hiddenTextInput.value;
       if (txt.trim()) {
+        console.log('Rendering text:', txt);
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
         ctx.fillStyle = brushColor;
         ctx.font = `${Math.max(12, brushSize * 3)}px sans-serif`;
         ctx.fillText(txt, x, y);
-        pushStroke({type: 'text', x, y, text: txt, color: brushColor, size: brushSize});
+        ctx.restore();
+        pushStroke({ type: 'text', x, y, text: txt, color: brushColor, size: brushSize });
         saveState();
       }
-      hiddenTextInput.blur();
+      hiddenTextInput.classList.remove('text-active');
       hiddenTextInput.style.opacity = '0';
-      hiddenTextInput.removeEventListener('keydown', onEnter);
+      hiddenTextInput.style.left = '-9999px';
+      hiddenTextInput.style.top = '-9999px';
+      hiddenTextInput.blur();
+      hiddenTextInput.removeEventListener('keydown', onKey);
+      console.log('Text input hidden');
     }
   };
-  hiddenTextInput.addEventListener('keydown', onEnter);
+  hiddenTextInput.addEventListener('keydown', onKey);
 }
 
-// Paint-bucket flood fill
+/* Paint-bucket flood fill */
 function floodFill(startX, startY, fillColor) {
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
-
   const targetOffset = (startY * canvas.width + startX) * 4;
   const targetColor = [
     data[targetOffset],
@@ -315,36 +326,29 @@ function floodFill(startX, startY, fillColor) {
     data[targetOffset + 2],
     data[targetOffset + 3],
   ];
-
   const fill = hexToRgba(fillColor);
-
-  if (colorsMatch(targetColor, fill)) return; // same color → skip
-
+  if (colorsMatch(targetColor, fill)) return;
   const stack = [[startX, startY]];
   while (stack.length) {
     const [x, y] = stack.pop();
     const idx = (y * canvas.width + x) * 4;
-
+    if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) continue;
     if (!matchTargetColor(data, idx, targetColor)) continue;
-
     setPixel(data, idx, fill);
-
-    // Push neighbors
-    if (x > 0) stack.push([x - 1, y]);
-    if (x < canvas.width - 1) stack.push([x + 1, y]);
-    if (y > 0) stack.push([x, y - 1]);
-    if (y < canvas.height - 1) stack.push([x, y + 1]);
+    stack.push([x - 1, y]);
+    stack.push([x + 1, y]);
+    stack.push([x, y - 1]);
+    stack.push([x, y + 1]);
   }
-
   ctx.putImageData(imageData, 0, 0);
-  saveState();
   pushStroke({ type: 'fill', color: fillColor });
+  saveState();
 }
 
 /* --- helpers --- */
 function hexToRgba(hex) {
   const bigint = parseInt(hex.slice(1), 16);
-  return [ (bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255, 255 ];
+  return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255, 255];
 }
 
 function colorsMatch(a, b) {
@@ -367,23 +371,16 @@ function setPixel(data, idx, fill) {
   data[idx + 3] = fill[3];
 }
 
-
 function setBackgroundImage(img) {
-  // draw image to fill entire canvas proportionally, then draw previous content on top
   const copy = document.createElement('canvas');
   copy.width = canvas.width;
   copy.height = canvas.height;
   copy.getContext('2d').drawImage(canvas, 0, 0);
-
-  // draw image stretched to cover
-  ctx.clearRect(0,0,canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-  // draw previous on top
   ctx.drawImage(copy, 0, 0);
-  // store bg image base64 so replay can reapply
   const dataURL = imgToDataURL(img);
-  pushStroke({type:'bg', dataURL});
+  pushStroke({ type: 'bg', dataURL });
   saveState();
   bgImage = img;
 }
@@ -416,10 +413,9 @@ redoBtn.addEventListener('click', () => {
 /* Clear */
 clearBtn.addEventListener('click', () => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // fill white background for a clean look
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  pushStroke({type:'fill', color:'#ffffff'});
+  pushStroke({ type: 'fill', color: '#ffffff' });
   saveState();
 });
 
@@ -442,36 +438,64 @@ darkToggle.addEventListener('click', () => {
 });
 
 /* Tool toggles */
-toolBrush.addEventListener('click', () => { currentTool = 'brush'; toolBrush.setAttribute('aria-pressed','true'); toolEraser.setAttribute('aria-pressed','false'); });
-toolEraser.addEventListener('click', () => { currentTool = 'eraser'; toolEraser.setAttribute('aria-pressed','true'); toolBrush.setAttribute('aria-pressed','false'); });
+function resetShapeState() {
+  isDrawing = false;
+  startPos = null;
+  clearPreview();
+  ctx.globalCompositeOperation = 'source-over';
+  updateBrushPreview(false);
+}
 
-/* Shapes dropdown simple toggle */
-toolShapes.addEventListener('click', (ev) => {
-  const open = shapesDropdown.getAttribute('aria-hidden') === 'true';
-  shapesDropdown.setAttribute('aria-hidden', open ? 'false' : 'true');
+const allToolButtons = [toolBrush, toolEraser, toolText, toolFill, toolShapes];
+shapeButtons.forEach(b => allToolButtons.push(b));
+
+function setActiveTool(btn) {
+  allToolButtons.forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+toolBrush.addEventListener('click', () => {
+  currentTool = 'brush';
+  setCompositeMode();
+  resetShapeState();
+  setActiveTool(toolBrush);
 });
 
-/* Handle shape selection */
+toolEraser.addEventListener('click', () => {
+  currentTool = 'eraser';
+  setCompositeMode();
+  resetShapeState();
+  setActiveTool(toolEraser);
+});
+
+toolShapes.addEventListener('click', () => {
+  const open = shapesDropdown.getAttribute('aria-hidden') === 'true';
+  shapesDropdown.setAttribute('aria-hidden', open ? 'false' : 'true');
+  setActiveTool(toolShapes);
+});
+
 shapeButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     currentTool = 'shape';
     currentShape = btn.dataset.shape;
-    shapesDropdown.setAttribute('aria-hidden','true');
-    toolBrush.setAttribute('aria-pressed','false');
-    toolEraser.setAttribute('aria-pressed','false');
+    setCompositeMode();
+    shapesDropdown.setAttribute('aria-hidden', 'true');
+    setActiveTool(toolShapes);
   });
 });
 
-/* Text */
 toolText.addEventListener('click', () => {
   currentTool = 'text';
-  toolBrush.setAttribute('aria-pressed','false');
-  toolEraser.setAttribute('aria-pressed','false');
+  setCompositeMode();
+  resetShapeState();
+  setActiveTool(toolText);
 });
 
-/* Fill */
 toolFill.addEventListener('click', () => {
   currentTool = 'fill';
+  setCompositeMode();
+  resetShapeState();
+  setActiveTool(toolFill);
 });
 
 /* BG image input */
@@ -479,7 +503,7 @@ bgImageInput.addEventListener('change', (ev) => {
   const file = ev.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = function (e) {
     const img = new Image();
     img.onload = () => {
       setBackgroundImage(img);
@@ -493,6 +517,7 @@ bgImageInput.addEventListener('change', (ev) => {
 colorPicker.addEventListener('input', (e) => {
   brushColor = e.target.value;
 });
+
 brushSizeInput.addEventListener('input', (e) => {
   brushSize = Number(e.target.value);
   updateBrushPreview(true, lastMouseX, lastMouseY);
@@ -503,40 +528,37 @@ let lastMouseX = 0, lastMouseY = 0;
 function onPointerMove(e) {
   const rect = canvas.getBoundingClientRect();
   let clientX = e.clientX, clientY = e.clientY;
-  if (e.touches && e.touches[0]) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
+  if (e.touches && e.touches[0]) {
+    clientX = e.touches[0].clientX;
+    clientY = e.touches[0].clientY;
+  }
   lastMouseX = clientX - rect.left;
   lastMouseY = clientY - rect.top;
-  if (lastMouseX >=0 && lastMouseY >=0 && lastMouseX <= canvas.width && lastMouseY <= canvas.height) {
-    updateBrushPreview(true, clientX - rect.left, clientY - rect.top);
+  if (lastMouseX >= 0 && lastMouseY >= 0 && lastMouseX <= canvas.width && lastMouseY <= canvas.height) {
+    updateBrushPreview(true, lastMouseX, lastMouseY);
   } else {
     updateBrushPreview(false);
   }
-
-  // if drawing with shape tool show preview
   if (currentTool === 'shape' && isDrawing && startPos) {
     drawShapePreview(currentShape, startPos.x, startPos.y, lastMouseX, lastMouseY, brushColor, brushSize);
   }
 }
 
-/* Pointer down/up handlers (works for mouse & touch) */
-let currentStroke = null;
-
-canvas.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  const pos = getPointerPosFromEvent(e);
+/* Pointer down/up handlers */
+canvas.addEventListener('pointerdown', (ev) => {
+  ev.preventDefault();
+  const pos = getPointerPosFromEvent(ev);
   if (currentTool === 'brush' || currentTool === 'eraser') {
-    beginStroke(e);
+    beginStroke(ev);
   } else if (currentTool === 'shape') {
     isDrawing = true;
-    startPos = getPointerPosFromEvent(e);
+    startPos = pos;
     ensurePreviewCanvas();
   } else if (currentTool === 'text') {
-    const p = getPointerPosFromEvent(e);
-    placeTextAt(p.x, p.y);
+    placeTextAt(pos.x, pos.y);
   } else if (currentTool === 'fill') {
-  const { x, y } = getPointerPosFromEvent(e);
-  floodFill(Math.floor(x), Math.floor(y), brushColor);
-}
+    floodFill(Math.floor(pos.x), Math.floor(pos.y), brushColor);
+  }
 });
 
 canvas.addEventListener('pointermove', (e) => {
@@ -557,77 +579,72 @@ canvas.addEventListener('pointerup', (e) => {
     endStroke(e);
   } else if (currentTool === 'shape') {
     if (startPos) {
-      commitShape(currentShape, startPos.x, startPos.y, p.x, p.y);
-      clearPreview();
+      try {
+        console.log('Committing shape at:', startPos, p);
+        commitShape(currentShape, startPos.x, startPos.y, p.x, p.y);
+        clearPreview();
+      } catch (err) {
+        console.error('Error committing shape:', err);
+      }
       isDrawing = false;
       startPos = null;
+      ctx.globalCompositeOperation = 'source-over';
     }
   }
+  updateBrushPreview(false);
+  setCompositeMode();
 });
 
-/* Helper to unify pointer/touch/mouse */
-function getPointerPosFromEvent(e) {
-  if (e.touches && e.touches[0]) e = e.touches[0];
-  const rect = canvas.getBoundingClientRect();
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-}
-
-/* Touch support mapping pointer events */
+/* Touch support */
 canvas.addEventListener('pointercancel', () => {
   isDrawing = false;
+  startPos = null;
   clearPreview();
+  ctx.globalCompositeOperation = 'source-over';
+  updateBrushPreview(false);
 });
 
-/* Also support legacy mouse/touch events for broad compatibility */
-canvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); }, {passive:false});
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+}, { passive: false });
 
-/* Hide brush preview when leaving canvas */
 canvas.addEventListener('mouseleave', () => updateBrushPreview(false));
 canvas.addEventListener('mouseenter', (e) => updateBrushPreview(true, lastMouseX, lastMouseY));
 
-/* Recording finished strokes: (done in commit functions & endStroke) */
-
-// ---------------- Timelapse Replay ----------------
+/* Timelapse Replay */
 async function replayTimelapse() {
   if (isReplaying) return;
   isReplaying = true;
-
-  // save current canvas to restore afterwards (optional)
-  const saved = ctx.getImageData(0,0,canvas.width, canvas.height);
-
-  // clear to white
-  ctx.clearRect(0,0,canvas.width, canvas.height);
+  const saved = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0,0,canvas.width, canvas.height);
-
-  // step through strokes
-  for (let i=0;i<strokes.length;i++){
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < strokes.length; i++) {
     const s = strokes[i];
     if (s.type === 'stroke') {
-      // replay a stroke by drawing points sequentially
       await replayStrokePoints(s);
     } else if (s.type === 'shape') {
-      // small pause then draw shape
       await pause(150);
       commitShapeReplay(s);
       await pause(80);
     } else if (s.type === 'text') {
       await pause(120);
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
       ctx.fillStyle = s.color;
       ctx.font = `${Math.max(12, s.size * 3)}px sans-serif`;
       ctx.fillText(s.text, s.x, s.y);
+      ctx.restore();
     } else if (s.type === 'fill') {
-      // fill color under existing
       await pause(70);
       ctx.fillStyle = s.color;
-      ctx.fillRect(0,0,canvas.width, canvas.height);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     } else if (s.type === 'bg') {
       await pause(100);
-      // recreate image from dataURL
-      await new Promise((res)=> {
+      await new Promise((res) => {
         const img = new Image();
         img.onload = () => {
-          ctx.clearRect(0,0,canvas.width, canvas.height);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           res();
         };
@@ -635,9 +652,7 @@ async function replayTimelapse() {
       });
     }
   }
-
   isReplaying = false;
-  // Save the replayed result as a state
   saveState();
 }
 
@@ -649,10 +664,10 @@ function commitShapeReplay(s) {
     ctx.rect(s.start.x, s.start.y, s.end.x - s.start.x, s.end.y - s.start.y);
     ctx.stroke();
   } else if (s.shape === 'circle') {
-    const cx = (s.start.x + s.end.x)/2, cy = (s.start.y + s.end.y)/2;
-    const rx = Math.abs(s.end.x - s.start.x)/2, ry = Math.abs(s.end.y - s.start.y)/2;
-    const r = Math.max(1, Math.sqrt(rx*rx + ry*ry));
-    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    const cx = (s.start.x + s.end.x) / 2, cy = (s.start.y + s.end.y) / 2;
+    const rx = Math.abs(s.end.x - s.start.x) / 2, ry = Math.abs(s.end.y - s.start.y) / 2;
+    const r = Math.max(1, Math.sqrt(rx * rx + ry * ry));
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.stroke();
   } else if (s.shape === 'line') {
     ctx.moveTo(s.start.x, s.start.y);
@@ -664,11 +679,15 @@ function commitShapeReplay(s) {
 
 function replayStrokePoints(s) {
   return new Promise((resolve) => {
-    if (!s.points || s.points.length === 0) { resolve(); return; }
+    if (!s.points || s.points.length === 0) {
+      resolve();
+      return;
+    }
     ctx.lineWidth = s.size;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = s.color;
+    ctx.globalCompositeOperation = s.color === '#ffffff' ? 'destination-out' : 'source-over';
     ctx.beginPath();
     const pts = s.points;
     ctx.moveTo(pts[0].x, pts[0].y);
@@ -677,197 +696,42 @@ function replayStrokePoints(s) {
       if (idx >= pts.length) {
         ctx.stroke();
         ctx.closePath();
+        ctx.globalCompositeOperation = 'source-over';
         resolve();
         return;
       }
       ctx.lineTo(pts[idx].x, pts[idx].y);
       ctx.stroke();
       idx++;
-      // small delay between points for visible timelapse effect
       setTimeout(step, 12);
     }
     step();
   });
 }
 
-function pause(ms) { return new Promise(res => setTimeout(res, ms)); }
+function pause(ms) {
+  return new Promise(res => setTimeout(res, ms));
+}
 
-/* Wire replay button */
 replayBtn.addEventListener('click', () => {
   replayTimelapse();
 });
 
-// ---------------- Utility: convert current canvas to dataURL and save BG if used ----------------
-// (we already push bg on setBackgroundImage)
-
-/* Convert pointer events above to stroke recording for 'stroke' type */
-function beginStroke(e) {
-  if (isReplaying) return;
-  isDrawing = true;
-  startPos = getPointerPosFromEvent(e);
-  lastPos = startPos;
-  ctx.beginPath();
-  ctx.moveTo(startPos.x, startPos.y);
-
-  currentStroke = {
-    type: 'stroke',
-    color: currentTool === 'eraser' ? '#ffffff' : brushColor,
-    size: brushSize,
-    points: [{x:startPos.x, y:startPos.y}]
-  };
-}
-
-function continueStroke(e) {
-  if (!isDrawing || isReplaying) return;
-  const p = getPointerPosFromEvent(e);
-  ctx.lineWidth = brushSize;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = currentTool === 'eraser' ? '#ffffff' : brushColor;
-
-  ctx.lineTo(p.x, p.y);
-  ctx.stroke();
-
-  currentStroke.points.push({x:p.x, y:p.y});
-  lastPos = p;
-}
-
-function endStroke(e) {
-  if (!isDrawing || isReplaying) return;
-  isDrawing = false;
-  ctx.closePath();
-  pushStroke(currentStroke);
-  saveState();
-}
-
-/* Replacing earlier definitions was intentional to keep record consistent */
-
-/* Commit a shape when user finishes drag (we already had commitShape) but ensure shape record is same */
-function commitShape(type, sx, sy, ex, ey) {
-  ctx.lineWidth = brushSize;
-  ctx.strokeStyle = brushColor;
-  ctx.fillStyle = brushColor;
-  ctx.beginPath();
-  if (type === 'rect') {
-    ctx.rect(sx, sy, ex - sx, ey - sy);
-    ctx.stroke();
-  } else if (type === 'circle') {
-    const cx = (sx + ex)/2, cy = (sy + ey)/2;
-    const rx = Math.abs(ex - sx)/2, ry = Math.abs(ey - sy)/2;
-    const r = Math.max(1, Math.sqrt(rx*rx + ry*ry));
-    ctx.arc(cx, cy, r, 0, Math.PI*2);
-    ctx.stroke();
-  } else if (type === 'line') {
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(ex, ey);
-    ctx.stroke();
-  }
-  ctx.closePath();
-
-  pushStroke({
-    type: 'shape',
-    shape: type,
-    start: {x:sx, y:sy},
-    end: {x:ex, y:ey},
-    color: brushColor,
-    size: brushSize
-  });
-  saveState();
-}
-
-/* Text placement (ensure same record shape) */
-function placeTextAt(x,y) {
-  hiddenTextInput.style.left = (x + canvas.getBoundingClientRect().left) + 'px';
-  hiddenTextInput.style.top = (y + canvas.getBoundingClientRect().top) + 'px';
-  hiddenTextInput.style.position = 'fixed';
-  hiddenTextInput.value = '';
-  hiddenTextInput.style.opacity = '1';
-  hiddenTextInput.focus();
-
-  const onKey = (ev) => {
-    if (ev.key === 'Enter') {
-      const txt = hiddenTextInput.value;
-      if (txt.trim()) {
-        ctx.fillStyle = brushColor;
-        ctx.font = `${Math.max(12, brushSize * 3)}px sans-serif`;
-        ctx.fillText(txt, x, y);
-        pushStroke({type: 'text', x, y, text: txt, color: brushColor, size: brushSize});
-        saveState();
-      }
-      hiddenTextInput.blur();
-      hiddenTextInput.style.opacity = '0';
-      hiddenTextInput.removeEventListener('keydown', onKey);
-    }
-  };
-  hiddenTextInput.addEventListener('keydown', onKey);
-}
-
-/* Background image setter used earlier */
-function setBackgroundImage(img) {
-  const copy = document.createElement('canvas');
-  copy.width = canvas.width;
-  copy.height = canvas.height;
-  copy.getContext('2d').drawImage(canvas, 0, 0);
-
-  ctx.clearRect(0,0,canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  ctx.drawImage(copy, 0, 0);
-
-  const dataURL = imgToDataURL(img);
-  pushStroke({type:'bg', dataURL});
-  saveState();
-  bgImage = img;
-}
-
-/* Helper to convert image to dataURL (used for replay) */
-function imgToDataURL(img) {
-  const t = document.createElement('canvas');
-  t.width = img.width;
-  t.height = img.height;
-  t.getContext('2d').drawImage(img, 0, 0);
-  return t.toDataURL('image/png');
-}
-
-/* Finally wire pointer events to default handlers (already bound above using pointer events) */
-// Keep pointerdown/move/up listeners already set earlier
-
-/* Extra: pointer events delegation to ensure capture on mobile */
-canvas.addEventListener('pointerdown', (ev)=>{ ev.preventDefault(); });
-canvas.style.touchAction = 'none';
-
-/* Update brush preview visibility initially */
-updateBrushPreview(false);
-
-/* Keep brush preview following pointer with pointermove on document for reliability */
+/* Document-level pointermove for brush preview */
 document.addEventListener('pointermove', (e) => {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  if (x>=0 && y>=0 && x <= canvas.width && y <= canvas.height) {
+  if (x >= 0 && y >= 0 && x <= canvas.width && y <= canvas.height) {
     updateBrushPreview(true, x, y);
   } else {
     updateBrushPreview(false);
   }
 });
 
-// ===== TOOL ACTIVE HIGHLIGHT =====
-const allToolButtons = [
-  toolBrush, toolEraser, toolText, toolFill, toolShapes
-];
-shapeButtons.forEach(b => allToolButtons.push(b));
-
-function setActiveTool(btn) {
-  allToolButtons.forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-}
-
-// Example: integrate into your existing handlers
-toolBrush.addEventListener('click', () => setActiveTool(toolBrush));
-toolEraser.addEventListener('click', () => setActiveTool(toolEraser));
-toolText.addEventListener('click', () => setActiveTool(toolText));
-toolFill.addEventListener('click', () => setActiveTool(toolFill));
-toolShapes.addEventListener('click', () => setActiveTool(toolShapes));
-
-shapeButtons.forEach(b => {
-  b.addEventListener('click', () => setActiveTool(toolShapes));
+canvas.addEventListener('pointerdown', (ev) => {
+  ev.preventDefault();
 });
+
+canvas.style.touchAction = 'none';
+updateBrushPreview(false);
