@@ -441,7 +441,7 @@ function floodFill(startX, startY, fillColor) {
 
     drawingCtx.putImageData(imageData, 0, 0);
     console.log('Flood fill completed with color:', fillColor);
-    pushStroke({ type: 'fill', color: fillColor });
+    pushStroke({ type: 'floodfill', x: startX, y: startY, color: fillColor });
     saveState();
   } catch (err) {
     console.error('Error in floodFill:', err);
@@ -555,7 +555,7 @@ if (clearBtn) {
   clearBtn.addEventListener('click', () => {
     if (!drawingCtx) return;
     drawingCtx.clearRect(0, 0, drawingCanvasEl.width, drawingCanvasEl.height);
-    pushStroke({ type: 'fill', color: '#ffffff' });
+    pushStroke({ type: 'clear' });
     saveState();
   });
 }
@@ -815,6 +815,10 @@ async function replayTimelapse() {
     return;
   }
   isReplaying = true;
+  const savedTool = currentTool;
+  currentTool = 'brush';
+  setCompositeMode();
+  setActiveTool(toolBrush);
   console.log('Starting replayTimelapse with', strokes.length, 'strokes');
 
   // Reset both canvases
@@ -848,9 +852,14 @@ async function replayTimelapse() {
         drawingCtx.font = `${Math.max(12, s.size * 3)}px sans-serif`;
         drawingCtx.fillText(s.text, s.x, s.y);
         drawingCtx.restore();
-      } else if (s.type === 'fill') {
+      } else if (s.type === 'floodfill') {
         await pause(70);
-        drawingCtx.fillStyle = s.color;
+        floodFill(s.x, s.y, s.color); // ← Re-run actual flood fill!
+      } else if (s.type === 'clear') {
+        await pause(50);
+        drawingCtx.clearRect(0, 0, drawingCanvasEl.width, drawingCanvasEl.height);
+        // Optionally fill white to match original clear
+        drawingCtx.fillStyle = '#ffffff';
         drawingCtx.fillRect(0, 0, drawingCanvasEl.width, drawingCanvasEl.height);
       } else if (s.type === 'bg') {
         await pause(100);
@@ -886,6 +895,9 @@ async function replayTimelapse() {
   }
   console.log('Replay completed');
   isReplaying = false;
+  currentTool = savedTool;
+  setCompositeMode();
+  setActiveTool(document.querySelector(`[data-tool="${savedTool}"]`) || toolBrush);
   saveState();
 }
 
